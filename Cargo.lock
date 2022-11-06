@@ -3000,6 +3000,7 @@ dependencies = [
  "once_cell",
  "parity-secp256k1",
  "pqcrypto-falcon",
+ "pqcrypto-traits",
  "primitive-types",
  "rand 0.7.3",
  "rand_core 0.5.1",
