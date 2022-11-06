@@ -19,6 +19,7 @@ pub static SECP256K1: Lazy<secp256k1::Secp256k1> = Lazy::new(secp256k1::Secp256k
 pub enum KeyType {
     ED25519 = 0,
     SECP256K1 = 1,
+    FALCON512 = 2,
 }
 
 impl Display for KeyType {
@@ -29,6 +30,7 @@ impl Display for KeyType {
             match self {
                 KeyType::ED25519 => "ed25519",
                 KeyType::SECP256K1 => "secp256k1",
+                KeyType::FALCON512 => "falcon512",
             },
         )
     }
@@ -42,6 +44,7 @@ impl FromStr for KeyType {
         match lowercase_key_type.as_str() {
             "ed25519" => Ok(KeyType::ED25519),
             "secp256k1" => Ok(KeyType::SECP256K1),
+            "falcon512" => Ok(KeyType::FALCON512),
             _ => Err(Self::Err::UnknownKeyType { unknown_key_type: lowercase_key_type }),
         }
     }
@@ -54,6 +57,7 @@ impl TryFrom<u8> for KeyType {
         match value {
             0 => Ok(KeyType::ED25519),
             1 => Ok(KeyType::SECP256K1),
+            2 => Ok(KeyType::FALCON512),
             unknown_key_type => {
                 Err(Self::Error::UnknownKeyType { unknown_key_type: unknown_key_type.to_string() })
             }
