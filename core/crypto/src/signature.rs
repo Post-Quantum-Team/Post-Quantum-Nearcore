@@ -12,6 +12,7 @@ use primitive_types::U256;
 use rand_core::OsRng;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
+use pqcrypto_falcon::falcon512;
 
 pub static SECP256K1: Lazy<secp256k1::Secp256k1> = Lazy::new(secp256k1::Secp256k1::new);
 
@@ -199,6 +200,64 @@ impl Ord for ED25519PublicKey {
     }
 }
 
+#[derive(Clone)]
+pub struct FALCON512PublicKey([u8; falcon512::public_key_bytes()]);
+
+impl From<[u8; falcon512::public_key_bytes()]> for FALCON512PublicKey {
+    fn from(data: [u8; falcon512::public_key_bytes()]) -> Self {
+        Self(data)
+    }
+}
+
+impl TryFrom<&[u8]> for FALCON512PublicKey {
+    type Error = crate::errors::ParseKeyError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(data.try_into().map_err(|_| crate::errors::ParseKeyError::InvalidLength {
+            expected_length: falcon512::public_key_bytes(),
+            received_length: data.len(),
+        })?))
+    }
+}
+
+impl AsRef<[u8]> for FALCON512PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for FALCON512PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", bs58::encode(&self.0.to_vec()).into_string())
+    }
+}
+
+impl From<FALCON512PublicKey> for [u8; falcon512::public_key_bytes()] {
+    fn from(pubkey: FALCON512PublicKey) -> Self {
+        pubkey.0
+    }
+}
+
+impl PartialEq for FALCON512PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0[..] == other.0[..]
+    }
+}
+
+impl PartialOrd for FALCON512PublicKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0[..].partial_cmp(&other.0[..])
+    }
+}
+
+impl Eq for FALCON512PublicKey {}
+
+impl Ord for FALCON512PublicKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0[..].cmp(&other.0[..])
+    }
+}
+
 /// Public key container supporting different curves.
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
 #[derive(Clone, PartialEq, PartialOrd, Ord, Eq)]
@@ -207,6 +266,8 @@ pub enum PublicKey {
     ED25519(ED25519PublicKey),
     /// 512 bit elliptic curve based public-key used in Bitcoin's public-key cryptography.
     SECP256K1(Secp256K1PublicKey),
+    /// 897 bit lattice based public-key.
+    FALCON512(FALCON512PublicKey),
 }
 
 impl PublicKey {
@@ -214,6 +275,7 @@ impl PublicKey {
         match self {
             Self::ED25519(_) => ed25519_dalek::PUBLIC_KEY_LENGTH + 1,
             Self::SECP256K1(_) => 65,
+            Self::FALCON512(_) => falcon512::public_key_bytes() + 1,
         }
     }
 
@@ -223,6 +285,7 @@ impl PublicKey {
                 PublicKey::ED25519(ED25519PublicKey([0u8; ed25519_dalek::PUBLIC_KEY_LENGTH]))
             }
             KeyType::SECP256K1 => PublicKey::SECP256K1(Secp256K1PublicKey([0u8; 64])),
+            KeyType::FALCON512 => PublicKey::FALCON512(FALCON512PublicKey([0u8; falcon512::public_key_bytes()])),
         }
     }
 
@@ -230,6 +293,7 @@ impl PublicKey {
         match self {
             Self::ED25519(_) => KeyType::ED25519,
             Self::SECP256K1(_) => KeyType::SECP256K1,
+            Self::FALCON512(_) => KeyType::FALCON512,
         }
     }
 
@@ -237,13 +301,14 @@ impl PublicKey {
         match self {
             Self::ED25519(key) => key.as_ref(),
             Self::SECP256K1(key) => key.as_ref(),
+            Self::FALCON512(key) => key.as_ref(),
         }
     }
 
     pub fn unwrap_as_ed25519(&self) -> &ED25519PublicKey {
         match self {
             Self::ED25519(key) => key,
-            Self::SECP256K1(_) => panic!(),
+            _ => panic!(),
         }
     }
 }
@@ -260,6 +325,10 @@ impl Hash for PublicKey {
             }
             PublicKey::SECP256K1(public_key) => {
                 state.write_u8(1u8);
+                state.write(&public_key.0);
+            }
+            PublicKey::FALCON512(public_key) => {
+                state.write_u8(0u8);
                 state.write(&public_key.0);
             }
         }
@@ -289,6 +358,10 @@ impl BorshSerialize for PublicKey {
                 BorshSerialize::serialize(&1u8, writer)?;
                 writer.write_all(&public_key.0)?;
             }
+            PublicKey::FALCON512(public_key) => {
+                BorshSerialize::serialize(&2u8, writer)?;
+                writer.write_all(&public_key.0)?;
+            }
         }
         Ok(())
     }
@@ -303,6 +376,9 @@ impl BorshDeserialize for PublicKey {
                 Ok(PublicKey::ED25519(ED25519PublicKey(BorshDeserialize::deserialize(buf)?)))
             }
             KeyType::SECP256K1 => {
+                Ok(PublicKey::SECP256K1(Secp256K1PublicKey(BorshDeserialize::deserialize(buf)?)))
+            }
+            KeyType::FALCON512 => {
                 Ok(PublicKey::SECP256K1(Secp256K1PublicKey(BorshDeserialize::deserialize(buf)?)))
             }
         }
@@ -343,6 +419,9 @@ impl From<&PublicKey> for String {
                 KeyType::SECP256K1,
                 bs58::encode(&public_key.0.to_vec()).into_string()
             ),
+            PublicKey::FALCON512(public_key) => {
+                format!("{}:{}", KeyType::FALCON512, bs58::encode(&public_key.0).into_string())
+            }
         }
     }
 }
@@ -378,6 +457,19 @@ impl FromStr for PublicKey {
                     });
                 }
                 Ok(PublicKey::SECP256K1(Secp256K1PublicKey(array)))
+            }
+            KeyType::FALCON512 => {
+                let mut array = [0; falcon512::public_key_bytes()];
+                let length = bs58::decode(key_data)
+                    .into(&mut array)
+                    .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
+                if length != falcon512::public_key_bytes() {
+                    return Err(Self::Err::InvalidLength {
+                        expected_length: falcon512::public_key_bytes(),
+                        received_length: length,
+                    });
+                }
+                Ok(PublicKey::FALCON512(FALCON512PublicKey(array)))
             }
         }
     }
