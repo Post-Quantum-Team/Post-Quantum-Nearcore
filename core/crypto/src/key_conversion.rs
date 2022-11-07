@@ -10,6 +10,7 @@ pub fn is_valid_staking_key(public_key: &PublicKey) -> bool {
     match public_key {
         PublicKey::ED25519(key) => convert_public_key(key).is_some(),
         PublicKey::SECP256K1(_) => false,
+        PublicKey::FALCON512(_) => false,
     }
 }
 
