@@ -12,8 +12,8 @@ use primitive_types::U256;
 use rand_core::OsRng;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use pqcrypto_falcon::{falcon512, falcon1024_verify_detached_signature, falcon1024_detached_sign};
-use pqcrypto_traits::sign::{SecretKey as SecretKey_falcon, PublicKey as PublicKey_falcon};
+use pqcrypto_falcon::falcon512;
+use pqcrypto_traits::sign::{SecretKey as SecretKey_falcon, PublicKey as PublicKey_falcon, DetachedSignature};
 
 pub static SECP256K1: Lazy<secp256k1::Secp256k1> = Lazy::new(secp256k1::Secp256k1::new);
 
@@ -598,11 +598,10 @@ impl SecretKey {
                 buf[64] = rec_id.to_i32() as u8;
                 Signature::SECP256K1(Secp256K1Signature(buf))
             }
-            /*
             SecretKey::FALCON512(secret_key) => {
                 let secret_key = falcon512::SecretKey::from_bytes(&secret_key.secret).unwrap();
-                Signature::FALCON512(falcon512::detached_sign(data, &secret_key))
-            }*/
+                Signature::FALCON512(FALCON512Signature::try_from(falcon512::detached_sign(data, &secret_key).as_bytes()).unwrap())
+            }
         }
     }
 
@@ -831,11 +830,69 @@ impl From<Secp256K1Signature> for [u8; 65] {
     }
 }
 
+#[derive(Clone, Hash)]
+pub struct FALCON512Signature(pub [u8; falcon512::signature_bytes()]);
+
+impl FALCON512Signature {
+    fn to_bytes(&self) -> [u8; falcon512::signature_bytes()] {
+        self.0
+    }
+}
+
+impl From<[u8; falcon512::signature_bytes()]> for FALCON512Signature {
+    fn from(data: [u8; falcon512::signature_bytes()]) -> Self {
+        Self(data)
+    }
+}
+
+impl TryFrom<&[u8]> for FALCON512Signature {
+    type Error = crate::errors::ParseSignatureError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        // It is suboptimal, but optimized implementation in Rust standard
+        // library only implements TryFrom for arrays up to 32 elements at
+        // the moment. Once https://github.com/rust-lang/rust/pull/74254
+        // lands, we can use the following impl:
+        //
+        // Ok(Self(data.try_into().map_err(|_| Self::Error::InvalidLength { expected_length: 65, received_length: data.len() })?))
+        if data.len() != falcon512::signature_bytes() {
+            return Err(Self::Error::InvalidLength {
+                expected_length: falcon512::signature_bytes(),
+                received_length: data.len(),
+            });
+        }
+        let mut signature = Self([0; falcon512::signature_bytes()]);
+        signature.0.copy_from_slice(data);
+        Ok(signature)
+    }
+}
+
+impl Eq for FALCON512Signature {}
+
+impl PartialEq for FALCON512Signature {
+    fn eq(&self, other: &Self) -> bool {
+        self.0[..].eq(&other.0[..])
+    }
+}
+
+impl Debug for FALCON512Signature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", bs58::encode(&self.0.to_vec()).into_string())
+    }
+}
+
+impl From<FALCON512Signature> for [u8; falcon512::signature_bytes()] {
+    fn from(sig: FALCON512Signature) -> [u8; falcon512::signature_bytes()] {
+        sig.0
+    }
+}
+
 /// Signature container supporting different curves.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Signature {
     ED25519(ed25519_dalek::Signature),
     SECP256K1(Secp256K1Signature),
+    FALCON512(FALCON512Signature)
 }
 
 #[cfg(feature = "deepsize_feature")]
@@ -853,6 +910,7 @@ impl Hash for Signature {
         match self {
             Signature::ED25519(sig) => sig.to_bytes().hash(state),
             Signature::SECP256K1(sig) => sig.hash(state),
+            Signature::FALCON512(sig) => sig.to_bytes().hash(state)
         };
     }
 }
@@ -875,6 +933,13 @@ impl Signature {
                 Ok(Signature::SECP256K1(Secp256K1Signature::try_from(signature_data).map_err(
                     |_| crate::errors::ParseSignatureError::InvalidData {
                         error_message: "invalid Secp256k1 signature length".to_string(),
+                    },
+                )?))
+            }
+            KeyType::FALCON512 => {
+                Ok(Signature::FALCON512(FALCON512Signature::try_from(signature_data).map_err(
+                    |_| crate::errors::ParseSignatureError::InvalidData {
+                        error_message: "invalid falcon512 signature length".to_string(),
                     },
                 )?))
             }
@@ -913,6 +978,13 @@ impl Signature {
                     )
                     .is_ok()
             }
+            (Signature::FALCON512(signature), PublicKey::FALCON512(public_key)) => {
+                let signature = falcon512::DetachedSignature::from_bytes(&signature.0).unwrap();
+                match falcon512::PublicKey::from_bytes(&public_key.0) {
+                    Err(_) => false,
+                    Ok(public_key) => falcon512::verify_detached_signature(&signature, data, &public_key).is_ok(),
+                }
+            }
             _ => false,
         }
     }
@@ -921,6 +993,7 @@ impl Signature {
         match self {
             Signature::ED25519(_) => KeyType::ED25519,
             Signature::SECP256K1(_) => KeyType::SECP256K1,
+            Signature::FALCON512(_) => KeyType::FALCON512
         }
     }
 }
@@ -940,6 +1013,10 @@ impl BorshSerialize for Signature {
             }
             Signature::SECP256K1(signature) => {
                 BorshSerialize::serialize(&1u8, writer)?;
+                writer.write_all(&signature.0)?;
+            }
+            Signature::FALCON512(signature) => {
+                BorshSerialize::serialize(&2u8, writer)?;
                 writer.write_all(&signature.0)?;
             }
         }
@@ -964,6 +1041,10 @@ impl BorshDeserialize for Signature {
                 let array: [u8; 65] = BorshDeserialize::deserialize(buf)?;
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
             }
+            KeyType::FALCON512 => {
+                let array: [u8; falcon512::signature_bytes()] = BorshDeserialize::deserialize(buf)?;
+                Ok(Signature::FALCON512(FALCON512Signature(array)))
+            }
         }
     }
 }
@@ -975,6 +1056,7 @@ impl Display for Signature {
                 bs58::encode(&signature.to_bytes().to_vec()).into_string()
             }
             Signature::SECP256K1(signature) => bs58::encode(&signature.0[..]).into_string(),
+            Signature::FALCON512(signature) => bs58::encode(&signature.0[..]).into_string(),
         };
         write!(f, "{}", format!("{}:{}", self.key_type(), data))
     }
@@ -1032,6 +1114,19 @@ impl FromStr for Signature {
                     });
                 }
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
+            }
+            KeyType::FALCON512 => {
+                let mut array = [0; falcon512::signature_bytes()];
+                let length = bs58::decode(sig_data)
+                    .into(&mut array[..])
+                    .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
+                if length != falcon512::signature_bytes() {
+                    return Err(Self::Err::InvalidLength {
+                        expected_length: falcon512::signature_bytes(),
+                        received_length: length,
+                    });
+                }
+                Ok(Signature::FALCON512(FALCON512Signature(array)))
             }
         }
     }
