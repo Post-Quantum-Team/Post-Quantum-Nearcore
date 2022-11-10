@@ -2997,9 +2997,9 @@ dependencies = [
  "ed25519-dalek",
  "hex-literal",
  "near-account-id",
+ "near-falcon512",
  "once_cell",
  "parity-secp256k1",
- "pqcrypto-falcon",
  "pqcrypto-traits",
  "primitive-types",
  "rand 0.7.3",
@@ -3031,6 +3031,18 @@ dependencies = [
  "serde_json",
  "smart-default",
  "tracing",
+]
+
+[[package]]
+name = "near-falcon512"
+version = "0.0.0"
+source = "git+https://github.com/Post-Quantum-Team/Post-Quantum-Near-Falcon512#97835f6e103b78dadd6c79d426c666a96f113686"
+dependencies = [
+ "cc",
+ "glob",
+ "libc",
+ "pqcrypto-internals",
+ "pqcrypto-traits",
 ]
 
 [[package]]
@@ -4240,19 +4252,6 @@ name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
-
-[[package]]
-name = "pqcrypto-falcon"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b6ee639378f80f29c4d9a14b7098f1d80c4d65b43f27d2bcfc87285a380f169"
-dependencies = [
- "cc",
- "glob",
- "libc",
- "pqcrypto-internals",
- "pqcrypto-traits",
-]
 
 [[package]]
 name = "pqcrypto-internals"

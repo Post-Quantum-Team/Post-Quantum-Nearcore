@@ -68,6 +68,15 @@ fn test_from_file() {
         "secret_key": "ed25519:3D4YudUahN1nawWogh8pAKSj92sUNMdbZGjn7kERKzYoTy8tnFQuwoGUC51DowKqorvkr2pytJSnwuSbsNVfqygr",
         "private_key": "ed25519:3D4YudUahN1nawWogh8pAKSj92sUNMdbZGjn7kERKzYoTy8tnFQuwoGUC51DowKqorvkr2pytJSnwuSbsNVfqygr"
     }"#).map(|key| key.account_id).unwrap_err();
+
+    //Falcon512 test
+    load(br#"{
+        "account_id": "example",
+        "public_key": "ed25519:6DSjZ8mvsRZDvFqFxo8tCKePG96omXW7eVYVSySmDk8e",
+        "private_key": "ed25519:3D4YudUahN1nawWogh8pAKSj92sUNMdbZGjn7kERKzYoTy8tnFQuwoGUC51DowKqorvkr2pytJSnwuSbsNVfqygr"
+    }"#).unwrap();
+
+    
     assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     let inner_msg = err.into_inner().unwrap().to_string();
     assert!(inner_msg.contains("duplicate field"));
