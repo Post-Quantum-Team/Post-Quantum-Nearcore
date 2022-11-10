@@ -148,4 +148,4 @@ pub(super) enum PeerMessage {
     _RoutingTableSyncV2,
 }
 #[cfg(target_arch = "x86_64")] // Non-x86_64 doesn't match this requirement yet but it's not bad as it's not production-ready
-const _: () = assert!(std::mem::size_of::<PeerMessage>() <= 3016, "PeerMessage > 1144 bytes");
+const _: () = assert!(std::mem::size_of::<PeerMessage>() <= 3500, "PeerMessage > 1144 bytes");

@@ -32,6 +32,9 @@ venv
 # Node
 **/node_modules/
 
+# Unit tests
+core/crypto/tests
+
 # Integration tests
 nearlib/
 near-shell/

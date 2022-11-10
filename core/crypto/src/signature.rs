@@ -630,6 +630,13 @@ impl SecretKey {
             _ => panic!(),
         }
     }
+    
+    pub fn unwrap_as_falcon512(&self) -> &FALCON512SecretKey {
+        match self {
+            SecretKey::FALCON512(key) => key,
+            _ => panic!(),
+        }
+    }
 }
 
 impl std::fmt::Display for SecretKey {
