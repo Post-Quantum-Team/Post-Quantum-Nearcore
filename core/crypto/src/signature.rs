@@ -516,8 +516,8 @@ impl Eq for ED25519SecretKey {}
 #[derive(Clone)]
 // This is actually a keypair, because falcon512 api only has keypair to generate both keys at the same time
 pub struct FALCON512SecretKey {
-    secret: [u8; falcon512::secret_key_bytes()],
-    public: [u8; falcon512::public_key_bytes()]
+    pub secret: [u8; falcon512::secret_key_bytes()],
+    pub public: [u8; falcon512::public_key_bytes()]
 }
 
 impl PartialEq for FALCON512SecretKey {
@@ -531,7 +531,7 @@ impl std::fmt::Debug for FALCON512SecretKey {
         write!(
             f,
             "{}",
-            bs58::encode(&self.secret[..ed25519_dalek::SECRET_KEY_LENGTH].to_vec()).into_string()
+            bs58::encode(&self.secret[..falcon512::secret_key_bytes()].to_vec()).into_string()
         )
     }
 }
@@ -1213,7 +1213,7 @@ mod tests {
     fn test_borsh_serialization() {
         use sha2::Digest;
         let data = sha2::Sha256::digest(b"123").to_vec();
-        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1] {
+        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1, KeyType::FALCON512] {
             let sk = SecretKey::from_seed(key_type, "test");
             let pk = sk.public_key();
             let bytes = pk.try_to_vec().unwrap();
