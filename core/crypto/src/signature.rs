@@ -15,6 +15,13 @@ use serde::{Deserialize, Serialize};
 use pqcrypto_falcon::falcon512;
 use pqcrypto_traits::sign::{SecretKey as SecretKey_falcon, PublicKey as PublicKey_falcon, DetachedSignature};
 
+//Falcon-512 import
+use near_falcon512::{self};
+use pqcrypto_traits::sign::PublicKey as PQPublicKey;
+use pqcrypto_traits::sign::SecretKey as PQSecretKey;
+use pqcrypto_traits::sign::DetachedSignature;
+//use sha2::Digest;
+
 pub static SECP256K1: Lazy<secp256k1::Secp256k1> = Lazy::new(secp256k1::Secp256k1::new);
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -201,59 +208,54 @@ impl Ord for ED25519PublicKey {
     }
 }
 
-#[derive(Clone)]
-pub struct FALCON512PublicKey([u8; falcon512::public_key_bytes()]);
+// Falcon-512 PublicKey Structure
+#[derive(Clone, derive_more::AsRef)]
+pub struct Falcon512PublicKey(pub [u8; near_falcon512::falcon512_public_key_bytes()]);
 
-impl From<[u8; falcon512::public_key_bytes()]> for FALCON512PublicKey {
-    fn from(data: [u8; falcon512::public_key_bytes()]) -> Self {
+impl From<[u8; near_falcon512::falcon512_public_key_bytes()]> for Falcon512PublicKey {
+    fn from(data: [u8; near_falcon512::falcon512_public_key_bytes()]) -> Self {
         Self(data)
     }
 }
 
-impl TryFrom<&[u8]> for FALCON512PublicKey {
+impl TryFrom<&[u8]> for Falcon512PublicKey {
     type Error = crate::errors::ParseKeyError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(data.try_into().map_err(|_| crate::errors::ParseKeyError::InvalidLength {
-            expected_length: falcon512::public_key_bytes(),
+            expected_length: near_falcon512::falcon512_public_key_bytes(),
             received_length: data.len(),
         })?))
     }
 }
 
-impl AsRef<[u8]> for FALCON512PublicKey {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl std::fmt::Debug for FALCON512PublicKey {
+impl std::fmt::Debug for Falcon512PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", bs58::encode(&self.0.to_vec()).into_string())
     }
 }
 
-impl From<FALCON512PublicKey> for [u8; falcon512::public_key_bytes()] {
+impl From<Falcon512PublicKey> for [u8; falcon512::public_key_bytes()] {
     fn from(pubkey: FALCON512PublicKey) -> Self {
         pubkey.0
     }
 }
 
-impl PartialEq for FALCON512PublicKey {
+impl PartialEq for Falcon512PublicKey {
     fn eq(&self, other: &Self) -> bool {
         self.0[..] == other.0[..]
     }
 }
 
-impl PartialOrd for FALCON512PublicKey {
+impl PartialOrd for Falcon512PublicKey {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0[..].partial_cmp(&other.0[..])
     }
 }
 
-impl Eq for FALCON512PublicKey {}
+impl Eq for Falcon512PublicKey {}
 
-impl Ord for FALCON512PublicKey {
+impl Ord for Falcon512PublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0[..].cmp(&other.0[..])
     }
@@ -267,8 +269,8 @@ pub enum PublicKey {
     ED25519(ED25519PublicKey),
     /// 512 bit elliptic curve based public-key used in Bitcoin's public-key cryptography.
     SECP256K1(Secp256K1PublicKey),
-    /// 897 bit lattice based public-key.
-    FALCON512(FALCON512PublicKey),
+    // Post-Quantum Algorithm
+    FALCON512(Falcon512PublicKey),
 }
 
 impl PublicKey {
@@ -276,7 +278,7 @@ impl PublicKey {
         match self {
             Self::ED25519(_) => ed25519_dalek::PUBLIC_KEY_LENGTH + 1,
             Self::SECP256K1(_) => 65,
-            Self::FALCON512(_) => falcon512::public_key_bytes() + 1,
+            Self::FALCON512(_) => near_falcon512::falcon512_public_key_bytes() + 1,
         }
     }
 
@@ -286,7 +288,9 @@ impl PublicKey {
                 PublicKey::ED25519(ED25519PublicKey([0u8; ed25519_dalek::PUBLIC_KEY_LENGTH]))
             }
             KeyType::SECP256K1 => PublicKey::SECP256K1(Secp256K1PublicKey([0u8; 64])),
-            KeyType::FALCON512 => PublicKey::FALCON512(FALCON512PublicKey([0u8; falcon512::public_key_bytes()])),
+            KeyType::FALCON512 => {
+                PublicKey::FALCON512(Falcon512PublicKey([0u8; near_falcon512::falcon512_public_key_bytes()]))
+            }
         }
     }
 
@@ -329,7 +333,7 @@ impl Hash for PublicKey {
                 state.write(&public_key.0);
             }
             PublicKey::FALCON512(public_key) => {
-                state.write_u8(0u8);
+                state.write_u8(2u8);
                 state.write(&public_key.0);
             }
         }
@@ -380,7 +384,7 @@ impl BorshDeserialize for PublicKey {
                 Ok(PublicKey::SECP256K1(Secp256K1PublicKey(BorshDeserialize::deserialize(buf)?)))
             }
             KeyType::FALCON512 => {
-                Ok(PublicKey::FALCON512(FALCON512PublicKey(BorshDeserialize::deserialize(buf)?)))
+                Ok(PublicKey::FALCON512(Falcon512PublicKey(BorshDeserialize::deserialize(buf)?)))
             }
         }
     }
@@ -420,9 +424,11 @@ impl From<&PublicKey> for String {
                 KeyType::SECP256K1,
                 bs58::encode(&public_key.0.to_vec()).into_string()
             ),
-            PublicKey::FALCON512(public_key) => {
-                format!("{}:{}", KeyType::FALCON512, bs58::encode(&public_key.0).into_string())
-            }
+            PublicKey::FALCON512(public_key) => format!(
+                "{}:{}",
+                KeyType::FALCON512,
+                bs58::encode(&public_key.0.to_vec()).into_string()
+            ),
         }
     }
 }
@@ -460,17 +466,17 @@ impl FromStr for PublicKey {
                 Ok(PublicKey::SECP256K1(Secp256K1PublicKey(array)))
             }
             KeyType::FALCON512 => {
-                let mut array = [0; falcon512::public_key_bytes()];
+                let mut array = [0; near_falcon512::falcon512_public_key_bytes()];
                 let length = bs58::decode(key_data)
                     .into(&mut array)
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != falcon512::public_key_bytes() {
+                if length != near_falcon512::falcon512_public_key_bytes() {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: falcon512::public_key_bytes(),
+                        expected_length: near_falcon512::falcon512_public_key_bytes(),
                         received_length: length,
                     });
                 }
-                Ok(PublicKey::FALCON512(FALCON512PublicKey(array)))
+                Ok(PublicKey::FALCON512(Falcon512PublicKey(array)))
             }
         }
     }
@@ -485,6 +491,12 @@ impl From<ED25519PublicKey> for PublicKey {
 impl From<Secp256K1PublicKey> for PublicKey {
     fn from(secp256k1: Secp256K1PublicKey) -> Self {
         Self::SECP256K1(secp256k1)
+    }
+}
+
+impl From<Falcon512PublicKey> for PublicKey {
+    fn from(falcon512: Falcon512PublicKey) -> Self {
+        Self::FALCON512(falcon512)
     }
 }
 
@@ -513,37 +525,34 @@ impl std::fmt::Debug for ED25519SecretKey {
 impl Eq for ED25519SecretKey {}
 
 
+//Falcon-512 secret key
 #[derive(Clone)]
-// This is actually a keypair, because falcon512 api only has keypair to generate both keys at the same time
-pub struct FALCON512SecretKey {
-    pub secret: [u8; falcon512::secret_key_bytes()],
-    pub public: [u8; falcon512::public_key_bytes()]
-}
+pub struct Falcon512SecretKey(pub [u8; near_falcon512::falcon512_secret_key_bytes()]);
 
-impl PartialEq for FALCON512SecretKey {
+impl PartialEq for Falcon512SecretKey {
     fn eq(&self, other: &Self) -> bool {
-        self.secret[..falcon512::secret_key_bytes()] == other.secret[..falcon512::secret_key_bytes()]
+        self.0 == other.0
     }
 }
 
-impl std::fmt::Debug for FALCON512SecretKey {
+impl std::fmt::Debug for Falcon512SecretKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "{}",
-            bs58::encode(&self.secret[..falcon512::secret_key_bytes()].to_vec()).into_string()
+            bs58::encode(&self.0[..].to_vec()).into_string()
         )
     }
 }
 
-impl Eq for FALCON512SecretKey {}
+impl Eq for Falcon512SecretKey {}
 
 /// Secret key container supporting different curves.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SecretKey {
     ED25519(ED25519SecretKey),
     SECP256K1(secp256k1::key::SecretKey),
-    FALCON512(FALCON512SecretKey)
+    FALCON512(Falcon512SecretKey),
 }
 
 impl SecretKey {
@@ -551,7 +560,7 @@ impl SecretKey {
         match self {
             SecretKey::ED25519(_) => KeyType::ED25519,
             SecretKey::SECP256K1(_) => KeyType::SECP256K1,
-            SecretKey::FALCON512(_) => KeyType::FALCON512
+            SecretKey::FALCON512(_) => KeyType::FALCON512,
         }
     }
 
@@ -565,15 +574,10 @@ impl SecretKey {
                 SecretKey::SECP256K1(secp256k1::key::SecretKey::new(&SECP256K1, &mut OsRng))
             }
             KeyType::FALCON512 => {
-                let (pk, sk) = falcon512::keypair();
-                let mut sk_bytes: [u8; falcon512::secret_key_bytes()] = [0u8; falcon512::secret_key_bytes()];
-                sk_bytes.copy_from_slice(sk.as_bytes());
-                let mut pk_bytes: [u8; falcon512::public_key_bytes()] = [0u8; falcon512::public_key_bytes()];
-                pk_bytes.copy_from_slice(pk.as_bytes());
-                SecretKey::FALCON512(FALCON512SecretKey {
-                    secret: sk_bytes,
-                    public: pk_bytes
-                })
+                let (_public_key, secret_key) = near_falcon512::falcon512_keypair();
+                let mut sk:[u8; near_falcon512::falcon512_secret_key_bytes()] = [0u8; near_falcon512::falcon512_secret_key_bytes()];
+                sk.copy_from_slice(secret_key.as_bytes());
+                SecretKey::FALCON512(Falcon512SecretKey(sk))
             }
         }
     }
@@ -598,11 +602,13 @@ impl SecretKey {
                 buf[64] = rec_id.to_i32() as u8;
                 Signature::SECP256K1(Secp256K1Signature(buf))
             }
+
             SecretKey::FALCON512(secret_key) => {
-                let secret_key = falcon512::SecretKey::from_bytes(&secret_key.secret).unwrap();
-                Signature::FALCON512(FALCON512Signature(falcon512::detached_sign(data, &secret_key)))
+                let secret_key = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).expect("Secret Key from bytes failed");
+                Signature::FALCON512(Falcon512Signature(near_falcon512::falcon512_detached_sign(data, &secret_key)))
             }
         }
+        
     }
 
     pub fn public_key(&self) -> PublicKey {
@@ -618,9 +624,15 @@ impl SecretKey {
                 public_key.0.copy_from_slice(&serialized[1..65]);
                 PublicKey::SECP256K1(public_key)
             }
-            SecretKey::FALCON512(secret_key) => PublicKey::FALCON512(FALCON512PublicKey(
-                secret_key.public,
-            )),
+            SecretKey::FALCON512(secret_key) => {
+                let sk = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).expect("Secret Key from bytes failed");
+                let pk = near_falcon512::falcon512_public_key_from_secret_key(sk);
+                let mut pub_key = [0u8; near_falcon512::falcon512_public_key_bytes()];
+                pub_key.copy_from_slice(pk.as_bytes());
+                PublicKey::FALCON512(
+                    Falcon512PublicKey(pub_key)
+                )
+            }
         }
     }
 
@@ -644,7 +656,7 @@ impl std::fmt::Display for SecretKey {
         let data = match self {
             SecretKey::ED25519(secret_key) => bs58::encode(&secret_key.0[..]).into_string(),
             SecretKey::SECP256K1(secret_key) => bs58::encode(&secret_key[..]).into_string(),
-            SecretKey::FALCON512(secret_key) => bs58::encode(&secret_key.secret[..]).into_string(),
+            SecretKey::FALCON512(secret_key) => bs58::encode(&secret_key.0[..]).into_string(),
         };
         write!(f, "{}:{}", self.key_type(), data)
     }
@@ -686,17 +698,19 @@ impl FromStr for SecretKey {
                 ))
             }
             KeyType::FALCON512 => {
-                let mut array = [0; falcon512::secret_key_bytes()];
+                const SIZE:usize = near_falcon512::falcon512_secret_key_bytes();
+                let mut array = [0; SIZE];
                 let length = bs58::decode(key_data)
                     .into(&mut array[..])
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != falcon512::secret_key_bytes() {
+                if length != near_falcon512::falcon512_secret_key_bytes() {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: ed25519_dalek::KEYPAIR_LENGTH,
+                        expected_length: near_falcon512::falcon512_secret_key_bytes(),
                         received_length: length,
                     });
                 }
-                Ok(Self::FALCON512(FALCON512SecretKey{ secret: array, public: [0u8; falcon512::public_key_bytes()]}))
+                let sk:[u8; near_falcon512::falcon512_secret_key_bytes()] = array[..near_falcon512::falcon512_secret_key_bytes()].try_into().unwrap();
+                Ok(Self::FALCON512(Falcon512SecretKey(sk)))
             }
         }
     }
@@ -713,7 +727,7 @@ impl serde::Serialize for SecretKey {
         let data = match self {
             SecretKey::ED25519(secret_key) => bs58::encode(&secret_key.0[..]).into_string(),
             SecretKey::SECP256K1(secret_key) => bs58::encode(&secret_key[..]).into_string(),
-            SecretKey::FALCON512(secret_key) => bs58::encode(&secret_key.secret[..]).into_string(),
+            SecretKey::FALCON512(secret_key) => bs58::encode(&secret_key.0[..]).into_string(),
         };
         serializer.serialize_str(&format!("{}:{}", self.key_type(), data))
     }
@@ -837,70 +851,41 @@ impl From<Secp256K1Signature> for [u8; 65] {
     }
 }
 
+// Falcon-512 Digital Signature
 #[derive(Clone)]
-pub struct FALCON512Signature(pub falcon512::DetachedSignature);
+pub struct Falcon512Signature(near_falcon512::falcon512::DetachedSignature);
 
-/*
-impl From<[u8; falcon512::signature_bytes()]> for FALCON512Signature {
-    fn from(data: [u8; falcon512::signature_bytes()]) -> Self {
-        Self(data)
-    }
-}*/
-/*
-impl TryFrom<&[u8]> for FALCON512Signature {
-    type Error = crate::errors::ParseSignatureError;
 
-    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        // It is suboptimal, but optimized implementation in Rust standard
-        // library only implements TryFrom for arrays up to 32 elements at
-        // the moment. Once https://github.com/rust-lang/rust/pull/74254
-        // lands, we can use the following impl:
-        //
-        // Ok(Self(data.try_into().map_err(|_| Self::Error::InvalidLength { expected_length: 65, received_length: data.len() })?))
-        if data.len() != falcon512::signature_bytes() {
-            return Err(Self::Error::InvalidLength {
-                expected_length: falcon512::signature_bytes(),
-                received_length: data.len(),
-            });
-        }
-        let mut signature = Self([0; falcon512::signature_bytes()]);
-        signature.0.copy_from_slice(data);
-        Ok(signature)
-    }
-}*/
-
-impl Eq for FALCON512Signature {}
-
-impl PartialEq for FALCON512Signature {
+impl PartialEq for Falcon512Signature {
     fn eq(&self, other: &Self) -> bool {
         self.0.as_bytes()[..].eq(&other.0.as_bytes()[..])
     }
 }
 
-impl Debug for FALCON512Signature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", bs58::encode(&self.0.as_bytes()[..].to_vec()).into_string())
+impl std::fmt::Debug for Falcon512Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            bs58::encode(&self.0.as_bytes()[..].to_vec()).into_string()
+        )
     }
 }
 
-impl Hash for FALCON512Signature {
-    fn hash<H: Hasher>(&self, _state: &mut H) {
-        self.0.as_bytes();
+impl Eq for Falcon512Signature {}
+
+impl Hash for Falcon512Signature {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(self.0.as_bytes());
     }
 }
-/*
-impl From<FALCON512Signature> for [u8; falcon512::signature_bytes()] {
-    fn from(sig: FALCON512Signature) -> [u8; falcon512::signature_bytes()] {
-        sig.0
-    }
-}*/
 
 /// Signature container supporting different curves.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Signature {
     ED25519(ed25519_dalek::Signature),
     SECP256K1(Secp256K1Signature),
-    FALCON512(FALCON512Signature)
+    FALCON512(Falcon512Signature),
 }
 
 #[cfg(feature = "deepsize_feature")]
@@ -918,7 +903,7 @@ impl Hash for Signature {
         match self {
             Signature::ED25519(sig) => sig.to_bytes().hash(state),
             Signature::SECP256K1(sig) => sig.hash(state),
-            Signature::FALCON512(sig) => sig.hash(state)
+            Signature::FALCON512(sig) => sig.hash(state),
         };
     }
 }
@@ -945,7 +930,9 @@ impl Signature {
                 )?))
             }
             KeyType::FALCON512 => {
-                Ok(Signature::FALCON512(FALCON512Signature(falcon512::DetachedSignature::from_bytes(signature_data).expect("Wrong Falcon Detached Signature"))))
+                Ok(Signature::FALCON512(
+                    Falcon512Signature(near_falcon512::falcon512::DetachedSignature::from_bytes(signature_data).expect("Wrong Falcon Detached Signature"))
+                ))
             }
         }
     }
@@ -983,9 +970,9 @@ impl Signature {
                     .is_ok()
             }
             (Signature::FALCON512(signature), PublicKey::FALCON512(public_key)) => {
-                match falcon512::PublicKey::from_bytes(&public_key.0) {
+                match near_falcon512::falcon512::PublicKey::from_bytes(&public_key.0) {
                     Err(_) => false,
-                    Ok(public_key) => falcon512::verify_detached_signature(&signature.0, data, &public_key).is_ok(),
+                    Ok(public_key) => near_falcon512::falcon512_verify_detached_signature(&signature.0, data, &public_key).is_ok(),
                 }
             }
             _ => false,
@@ -996,7 +983,7 @@ impl Signature {
         match self {
             Signature::ED25519(_) => KeyType::ED25519,
             Signature::SECP256K1(_) => KeyType::SECP256K1,
-            Signature::FALCON512(_) => KeyType::FALCON512
+            Signature::FALCON512(_) => KeyType::FALCON512,
         }
     }
 }
@@ -1045,8 +1032,8 @@ impl BorshDeserialize for Signature {
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
             }
             KeyType::FALCON512 => {
-                let array: [u8; falcon512::signature_bytes()] = BorshDeserialize::deserialize(buf)?;
-                Ok(Signature::FALCON512(FALCON512Signature(falcon512::DetachedSignature::from_bytes(&array).expect("Falcon512 deserialize failed"))))
+                let array: [u8; near_falcon512::falcon512_signature_bytes()] = BorshDeserialize::deserialize(buf)?;
+                Ok(Signature::FALCON512(Falcon512Signature(near_falcon512::falcon512::DetachedSignature::from_bytes(&array).expect("Falcon512 deserialize failed"))))
             }
         }
     }
@@ -1059,7 +1046,9 @@ impl Display for Signature {
                 bs58::encode(&signature.to_bytes().to_vec()).into_string()
             }
             Signature::SECP256K1(signature) => bs58::encode(&signature.0[..]).into_string(),
-            Signature::FALCON512(signature) => bs58::encode(&signature.0.as_bytes().to_vec()).into_string(),
+            Signature::FALCON512(signature) => {
+                bs58::encode(&signature.0.as_bytes().to_vec()).into_string()
+            },
         };
         write!(f, "{}", format!("{}:{}", self.key_type(), data))
     }
@@ -1119,17 +1108,21 @@ impl FromStr for Signature {
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
             }
             KeyType::FALCON512 => {
-                let mut array = [0; falcon512::signature_bytes()];
+                let mut array = [0; near_falcon512::falcon512_signature_bytes()];
                 let length = bs58::decode(sig_data)
                     .into(&mut array[..])
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != falcon512::signature_bytes() {
+                if length != near_falcon512::falcon512_signature_bytes() {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: falcon512::signature_bytes(),
+                        expected_length: near_falcon512::falcon512_signature_bytes(),
                         received_length: length,
                     });
                 }
-                Ok(Signature::FALCON512(FALCON512Signature(falcon512::DetachedSignature::from_bytes(&array).expect("From String import Falcon failed"))))
+                let sig = near_falcon512::falcon512::DetachedSignature::from_bytes(&array).expect("From String import Falcon failed");
+
+                Ok(Signature::FALCON512(
+                    Falcon512Signature(sig)
+                ))
             }
         }
     }
@@ -1155,12 +1148,38 @@ mod tests {
     fn test_sign_verify() {
         for key_type in vec![KeyType::ED25519, KeyType::SECP256K1, KeyType::FALCON512] {
             let secret_key = SecretKey::from_random(key_type);
+            dbg!(&secret_key);
             let public_key = secret_key.public_key();
+            dbg!(&public_key);
             use sha2::Digest;
             let data = sha2::Sha256::digest(b"123").to_vec();
             let signature = secret_key.sign(&data);
             assert!(signature.verify(&data, &public_key));
         }
+    }
+
+    #[test]
+    fn test_sign_falcon() {
+        let key_type = KeyType::FALCON512;
+        let secret_key = SecretKey::from_random(key_type);
+        dbg!(&secret_key);
+        let public_key = secret_key.public_key();
+        dbg!(&public_key);
+        let data = (b"Ceci est un test !!").to_vec();
+        let signature = secret_key.sign(&data);
+        assert!(signature.verify(&data, &public_key));
+    }
+    
+    #[test]
+    fn test_sign_error_falcon() {
+        // This test should failed
+        let key_type = KeyType::FALCON512;
+        let secret_key = SecretKey::from_random(key_type);
+        let public_key = secret_key.public_key();
+        let data = (b"Ceci est un test !!").to_vec();
+        let data2 = (b"Ceci est un testi !!").to_vec();
+        let signature = secret_key.sign(&data);
+        assert!(!signature.verify(&data2, &public_key));
     }
 
     #[test]
