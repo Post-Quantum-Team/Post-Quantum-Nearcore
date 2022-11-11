@@ -12,8 +12,6 @@ use primitive_types::U256;
 use rand_core::OsRng;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use pqcrypto_falcon::falcon512;
-use pqcrypto_traits::sign::{SecretKey as SecretKey_falcon, PublicKey as PublicKey_falcon, DetachedSignature};
 
 //Falcon-512 import
 use near_falcon512::{self};
@@ -235,8 +233,8 @@ impl std::fmt::Debug for Falcon512PublicKey {
     }
 }
 
-impl From<Falcon512PublicKey> for [u8; falcon512::public_key_bytes()] {
-    fn from(pubkey: FALCON512PublicKey) -> Self {
+impl From<Falcon512PublicKey> for [u8; near_falcon512::falcon512_public_key_bytes()] {
+    fn from(pubkey: Falcon512PublicKey) -> Self {
         pubkey.0
     }
 }
@@ -643,7 +641,7 @@ impl SecretKey {
         }
     }
     
-    pub fn unwrap_as_falcon512(&self) -> &FALCON512SecretKey {
+    pub fn unwrap_as_falcon512(&self) -> &Falcon512SecretKey {
         match self {
             SecretKey::FALCON512(key) => key,
             _ => panic!(),
@@ -855,6 +853,35 @@ impl From<Secp256K1Signature> for [u8; 65] {
 #[derive(Clone)]
 pub struct Falcon512Signature(near_falcon512::falcon512::DetachedSignature);
 
+impl From<[u8; near_falcon512::falcon512_signature_bytes()]> for Falcon512Signature {
+    fn from(data: [u8; near_falcon512::falcon512_signature_bytes()]) -> Self {
+        Falcon512Signature::try_from(&data[..]).unwrap()
+    }
+}
+
+impl TryFrom<&[u8]> for Falcon512Signature {
+    type Error = crate::errors::ParseSignatureError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        // It is suboptimal, but optimized implementation in Rust standard
+        // library only implements TryFrom for arrays up to 32 elements at
+        // the moment. Once https://github.com/rust-lang/rust/pull/74254
+        // lands, we can use the following impl:
+        //
+        // Ok(Self(data.try_into().map_err(|_| Self::Error::InvalidLength { expected_length: 65, received_length: data.len() })?))
+        if data.len() != near_falcon512::falcon512_signature_bytes() {
+            return Err(Self::Error::InvalidLength {
+                expected_length: near_falcon512::falcon512_signature_bytes(),
+                received_length: data.len(),
+            });
+        }
+        let signature = near_falcon512::falcon512::DetachedSignature::from_bytes(data).map_err(|err| Self::Error::InvalidData {
+            error_message: err.to_string(),
+        })?;
+        let signature = Falcon512Signature(signature);
+        Ok(signature)
+    }
+}
 
 impl PartialEq for Falcon512Signature {
     fn eq(&self, other: &Self) -> bool {
@@ -873,6 +900,14 @@ impl std::fmt::Debug for Falcon512Signature {
 }
 
 impl Eq for Falcon512Signature {}
+
+impl From<Falcon512Signature> for [u8; near_falcon512::falcon512_signature_bytes()] {
+    fn from(sig: Falcon512Signature) -> [u8; near_falcon512::falcon512_signature_bytes()] {
+        let mut signature = [0u8; near_falcon512::falcon512_signature_bytes()];
+        signature.copy_from_slice(sig.0.as_bytes());
+        signature
+    }
+}
 
 impl Hash for Falcon512Signature {
     fn hash<H: Hasher>(&self, state: &mut H) {

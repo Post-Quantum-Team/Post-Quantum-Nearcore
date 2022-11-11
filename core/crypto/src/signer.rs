@@ -118,8 +118,6 @@ impl From<Arc<InMemorySigner>> for KeyFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, to_string};
     use std::str::FromStr;
     use std::io::Write;
 
