@@ -863,12 +863,6 @@ impl TryFrom<&[u8]> for Falcon512Signature {
     type Error = crate::errors::ParseSignatureError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        // It is suboptimal, but optimized implementation in Rust standard
-        // library only implements TryFrom for arrays up to 32 elements at
-        // the moment. Once https://github.com/rust-lang/rust/pull/74254
-        // lands, we can use the following impl:
-        //
-        // Ok(Self(data.try_into().map_err(|_| Self::Error::InvalidLength { expected_length: 65, received_length: data.len() })?))
         if data.len() != near_falcon512::falcon512_signature_bytes() {
             return Err(Self::Error::InvalidLength {
                 expected_length: near_falcon512::falcon512_signature_bytes(),
@@ -1183,9 +1177,7 @@ mod tests {
     fn test_sign_verify() {
         for key_type in vec![KeyType::ED25519, KeyType::SECP256K1, KeyType::FALCON512] {
             let secret_key = SecretKey::from_random(key_type);
-            dbg!(&secret_key);
             let public_key = secret_key.public_key();
-            dbg!(&public_key);
             use sha2::Digest;
             let data = sha2::Sha256::digest(b"123").to_vec();
             let signature = secret_key.sign(&data);
@@ -1197,9 +1189,7 @@ mod tests {
     fn test_sign_falcon() {
         let key_type = KeyType::FALCON512;
         let secret_key = SecretKey::from_random(key_type);
-        dbg!(&secret_key);
         let public_key = secret_key.public_key();
-        dbg!(&public_key);
         let data = (b"Ceci est un test !!").to_vec();
         let signature = secret_key.sign(&data);
         assert!(signature.verify(&data, &public_key));
