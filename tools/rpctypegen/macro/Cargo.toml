@@ -1,13 +1,12 @@
 [package]
 name = "near-rpc-error-macro"
-version = "0.0.0"
-authors.workspace = true
-publish = true
+version = "0.15.0"
+authors = ["Zigtur <zigtur@protonmail.com>"]
 # Please update rust-toolchain.toml as well when changing version here:
-rust-version.workspace = true
-edition.workspace = true
+edition = "2021"
+rust-version = "1.64.0"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/near/nearcore"
+repository = "https://github.com/Post-Quantum-Team/Post-Quantum-Nearcore"
 description = """
 This crate generates schema for Rust structs which can be used by TypeScript.
 """
@@ -16,9 +15,9 @@ This crate generates schema for Rust structs which can be used by TypeScript.
 proc-macro = true
 
 [dependencies]
-serde.workspace = true
-serde_json = { workspace = true, optional = true, features = ["preserve_order"] }
-syn.workspace = true
+serde = { version = "1.0.136", features = ["alloc", "derive", "rc"] }
+serde_json = { version = "1.0.68", optional = true, features = ["preserve_order"] }
+syn = { version = "1.0.54", features = ["extra-traits", "full"] }
 
 near-rpc-error-core = { path = "../core" }
 

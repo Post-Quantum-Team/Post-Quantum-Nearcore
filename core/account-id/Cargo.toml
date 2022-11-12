@@ -1,14 +1,13 @@
 [package]
 name = "near-account-id"
-version = "0.0.0"
-authors.workspace = true
-publish = true
+version = "0.15.0"
+authors = ["Zigtur <zigtur@protonmail.com>"]
 # This crate is published to crates.io with a semver API.  Care must be taken
 # when updaing its rust-version.
 rust-version = "1.60.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/near/nearcore"
+repository = "https://github.com/Post-Quantum-Team/Post-Quantum-Nearcore"
 description = "This crate contains the Account ID primitive and its validation facilities"
 
 [features]
@@ -17,10 +16,11 @@ internal_unstable = []
 deepsize_feature = ["deepsize"]
 
 [dependencies]
-borsh = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
-deepsize = { workspace = true, optional = true }
+borsh = { version = "0.9", features = ["rc"], optional = true }
+deepsize = { version = "0.2.0", features = ["chrono"], optional = true }
+serde = { version = "1.0.136", features = ["alloc", "derive", "rc"], optional = true }
+
 
 [dev-dependencies]
-bolero.workspace = true
-serde_json.workspace = true
+bolero = "0.6.2"
+serde_json = "1.0.68"

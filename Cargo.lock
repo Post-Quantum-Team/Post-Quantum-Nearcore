@@ -2813,7 +2813,7 @@ dependencies = [
 
 [[package]]
 name = "near-account-id"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "bolero",
  "borsh",
@@ -2853,7 +2853,7 @@ dependencies = [
 
 [[package]]
 name = "near-chain"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "ansi_term",
@@ -2887,7 +2887,7 @@ dependencies = [
 
 [[package]]
 name = "near-chain-configs"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2904,7 +2904,7 @@ dependencies = [
 
 [[package]]
 name = "near-chain-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "chrono",
  "near-crypto",
@@ -2915,7 +2915,7 @@ dependencies = [
 
 [[package]]
 name = "near-chunks"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "assert_matches",
@@ -2940,7 +2940,7 @@ dependencies = [
 
 [[package]]
 name = "near-chunks-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "near-chain-primitives",
  "near-primitives",
@@ -2948,7 +2948,7 @@ dependencies = [
 
 [[package]]
 name = "near-client"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "actix-rt",
@@ -2990,7 +2990,7 @@ dependencies = [
 
 [[package]]
 name = "near-client-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "chrono",
@@ -3009,7 +3009,7 @@ dependencies = [
 
 [[package]]
 name = "near-crypto"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "arrayref",
  "blake2",
@@ -3036,7 +3036,7 @@ dependencies = [
 
 [[package]]
 name = "near-epoch-manager"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "borsh",
  "chrono",
@@ -3057,7 +3057,7 @@ dependencies = [
 
 [[package]]
 name = "near-indexer"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "anyhow",
@@ -3082,7 +3082,7 @@ dependencies = [
 
 [[package]]
 name = "near-indexer-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "near-primitives",
  "serde",
@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "near-jsonrpc"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "actix",
  "actix-cors",
@@ -3159,7 +3159,7 @@ dependencies = [
 
 [[package]]
 name = "near-jsonrpc-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "near-chain-configs",
  "near-client-primitives",
@@ -3342,7 +3342,7 @@ dependencies = [
 
 [[package]]
 name = "near-primitives"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "assert_matches",
  "bencher",
@@ -3374,7 +3374,7 @@ dependencies = [
 
 [[package]]
 name = "near-primitives-core"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "base64",
  "borsh",
@@ -3420,7 +3420,7 @@ dependencies = [
 
 [[package]]
 name = "near-rpc-error-core"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "quote",
  "serde",
@@ -3430,7 +3430,7 @@ dependencies = [
 
 [[package]]
 name = "near-rpc-error-macro"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "near-rpc-error-core",
  "serde",
@@ -3519,7 +3519,7 @@ dependencies = [
 
 [[package]]
 name = "near-vm-errors"
-version = "0.0.0"
+version = "0.15.0"
 dependencies = [
  "borsh",
  "deepsize",

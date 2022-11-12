@@ -1,21 +1,20 @@
 [package]
 name = "near-jsonrpc-primitives"
-version = "0.0.0"
-authors.workspace = true
-publish = true
+version = "0.15.0"
+authors = ["Zigtur <zigtur@protonmail.com>"]
 # Please update rust-toolchain.toml as well when changing version here:
-rust-version.workspace = true
-edition.workspace = true
+edition = "2021"
+rust-version = "1.64.0"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/near/nearcore"
+repository = "https://github.com/Post-Quantum-Team/Post-Quantum-Nearcore"
 description = "This crate hosts structures for the NEAR JSON RPC Requests, Responses and Error types"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
+serde = { version = "1.0.136", features = ["alloc", "derive", "rc"] }
+serde_json = "1.0.68"
+thiserror = "1.0.30"
 
 near-crypto = { path = "../../core/crypto" }
 near-primitives = { path = "../../core/primitives" }

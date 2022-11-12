@@ -1,24 +1,23 @@
 [package]
 name = "near-vm-errors"
-version = "0.0.0"
-authors.workspace = true
-publish = true
+version = "0.15.0"
+authors = ["Zigtur <zigtur@protonmail.com>"]
 # Please update rust-toolchain.toml as well when changing version here:
-rust-version.workspace = true
-edition.workspace = true
+edition = "2021"
+rust-version = "1.64.0"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 categories = ["wasm"]
-repository = "https://github.com/near/nearcore"
+repository = "https://github.com/Post-Quantum-Team/Post-Quantum-Nearcore"
 description = """
 Error that can occur inside Near Runtime encapsulated in a separate crate. Might merge it later.
 """
 
 [dependencies]
-borsh.workspace = true
-deepsize = { workspace = true, optional = true }
-serde.workspace = true
-strum.workspace = true
+borsh = { version = "0.9", features = ["rc"] }
+deepsize = { version = "0.2.0", features = ["chrono"], optional = true }
+serde = { version = "1.0.136", features = ["alloc", "derive", "rc"] }
+strum = { version = "0.24", features = ["derive"] }
 
 near-account-id = { path = "../../core/account-id" }
 near-rpc-error-macro = { path = "../../tools/rpctypegen/macro" }
