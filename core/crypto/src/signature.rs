@@ -850,7 +850,7 @@ impl From<Secp256K1Signature> for [u8; 65] {
 }
 
 // Falcon-512 Digital Signature
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Falcon512Signature(near_falcon512::falcon512::DetachedSignature);
 
 impl From<[u8; near_falcon512::falcon512_signature_bytes()]> for Falcon512Signature {
@@ -900,12 +900,6 @@ impl From<Falcon512Signature> for [u8; near_falcon512::falcon512_signature_bytes
         let mut signature = [0u8; near_falcon512::falcon512_signature_bytes()];
         signature.copy_from_slice(sig.0.as_bytes());
         signature
-    }
-}
-
-impl Hash for Falcon512Signature {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.0.as_bytes());
     }
 }
 
