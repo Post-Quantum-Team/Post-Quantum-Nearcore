@@ -316,6 +316,14 @@ impl PublicKey {
             _ => panic!(),
         }
     }
+
+    pub fn unwrap_as_falcon512(&self) -> &Falcon512PublicKey {
+        match self {
+            PublicKey::FALCON512(key) => key,
+            _ => panic!(),
+        }
+    }
+    
 }
 
 // This `Hash` implementation is safe since it retains the property
