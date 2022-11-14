@@ -3036,7 +3036,7 @@ dependencies = [
 [[package]]
 name = "near-falcon512"
 version = "0.0.0"
-source = "git+https://github.com/Post-Quantum-Team/Post-Quantum-Near-Falcon512#b9c6a87ea61b9de1561571841e0010fe92a5255e"
+source = "git+https://github.com/Post-Quantum-Team/Post-Quantum-Near-Falcon512#a94ab5bc4a208478a4edc22305cab771d6ff6595"
 dependencies = [
  "cc",
  "glob",

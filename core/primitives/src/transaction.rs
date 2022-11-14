@@ -493,6 +493,31 @@ mod tests {
         assert!(verify_transaction_signature(&decoded_tx, &valid_keys));
     }
 
+    #[test]
+    fn test_verify_transaction_falcon512() {
+        let signer = InMemorySigner::from_random("test".parse().unwrap(), KeyType::FALCON512);
+        let transaction = Transaction {
+            signer_id: "test".parse().unwrap(),
+            public_key: signer.public_key(),
+            nonce: 0,
+            receiver_id: "test".parse().unwrap(),
+            block_hash: Default::default(),
+            actions: vec![],
+        }
+        .sign(&signer);
+        let wrong_public_key = PublicKey::from_seed(KeyType::FALCON512, "wrong");
+        let valid_keys = vec![signer.public_key(), wrong_public_key.clone()];
+        dbg!(&valid_keys);
+        assert!(verify_transaction_signature(&transaction, &valid_keys));
+
+        let invalid_keys = vec![wrong_public_key];
+        assert!(!verify_transaction_signature(&transaction, &invalid_keys));
+
+        let bytes = transaction.try_to_vec().unwrap();
+        let decoded_tx = SignedTransaction::try_from_slice(&bytes).unwrap();
+        assert!(verify_transaction_signature(&decoded_tx, &valid_keys));
+    }
+
     /// This test is change checker for a reason - we don't expect transaction format to change.
     /// If it does - you MUST update all of the dependencies: like nearlib and other clients.
     #[test]
