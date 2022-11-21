@@ -5,8 +5,6 @@ use crate::signature::{
 };
 use crate::{InMemorySigner, Signature};
 use near_account_id::AccountId;
-use pqcrypto_traits::sign::PublicKey as PqCryptoTrait_PublicKey;
-use pqcrypto_traits::sign::SecretKey as PqCryptoTrait_SecretKey;
 
 fn ed25519_key_pair_from_seed(seed: &str) -> ed25519_dalek::Keypair {
     let seed_bytes = seed.as_bytes();
@@ -36,8 +34,7 @@ impl PublicKey {
             }
             KeyType::FALCON512 => {
                 let (pk, _sk) = near_falcon512::falcon512_keypair_from_seed(seed.as_bytes());
-                let mut public_key = [0u8; near_falcon512::falcon512_public_key_bytes()];
-                public_key.copy_from_slice(pk.as_bytes());
+                let public_key = <[u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]>::from(pk);
                 PublicKey::FALCON512(Falcon512PublicKey::from(public_key))
             }
             _ => unimplemented!(),
@@ -54,8 +51,7 @@ impl SecretKey {
             }
             KeyType::FALCON512 => {
                 let (_pk, sk) = near_falcon512::falcon512_keypair_from_seed(seed.as_bytes());
-                let mut secret_key = [0u8; near_falcon512::falcon512_secret_key_bytes()];
-                secret_key.copy_from_slice(sk.as_bytes());
+                let secret_key = <[u8; near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE]>::from(sk);
                 SecretKey::FALCON512(Falcon512SecretKey(secret_key))
             }
             _ => SecretKey::SECP256K1(secp256k1_secret_key_from_seed(seed)),
@@ -64,7 +60,7 @@ impl SecretKey {
 }
 
 const SIG: [u8; ed25519_dalek::SIGNATURE_LENGTH] = [0u8; ed25519_dalek::SIGNATURE_LENGTH];
-const SIG_FALCON: [u8; near_falcon512::falcon512_signature_bytes()] = [0u8; near_falcon512::falcon512_signature_bytes()];
+const SIG_FALCON: [u8; near_falcon512::NEAR_FALCON512_SIG_SIZE] = [0u8; near_falcon512::NEAR_FALCON512_SIG_SIZE];
 
 impl Signature {
     /// Empty signature that doesn't correspond to anything.
