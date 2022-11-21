@@ -209,10 +209,10 @@ impl Ord for ED25519PublicKey {
 
 // Falcon-512 PublicKey Structure
 #[derive(Clone, derive_more::AsRef)]
-pub struct Falcon512PublicKey(pub [u8; near_falcon512::falcon512_public_key_bytes()]);
+pub struct Falcon512PublicKey(pub [u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]);
 
-impl From<[u8; near_falcon512::falcon512_public_key_bytes()]> for Falcon512PublicKey {
-    fn from(data: [u8; near_falcon512::falcon512_public_key_bytes()]) -> Self {
+impl From<[u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]> for Falcon512PublicKey {
+    fn from(data: [u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]) -> Self {
         Self(data)
     }
 }
@@ -222,7 +222,7 @@ impl TryFrom<&[u8]> for Falcon512PublicKey {
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(data.try_into().map_err(|_| crate::errors::ParseKeyError::InvalidLength {
-            expected_length: near_falcon512::falcon512_public_key_bytes(),
+            expected_length: near_falcon512::NEAR_FALCON512_PUBKEY_SIZE,
             received_length: data.len(),
         })?))
     }
@@ -234,7 +234,7 @@ impl std::fmt::Debug for Falcon512PublicKey {
     }
 }
 
-impl From<Falcon512PublicKey> for [u8; near_falcon512::falcon512_public_key_bytes()] {
+impl From<Falcon512PublicKey> for [u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE] {
     fn from(pubkey: Falcon512PublicKey) -> Self {
         pubkey.0
     }
@@ -278,7 +278,7 @@ impl PublicKey {
         match self {
             Self::ED25519(_) => ed25519_dalek::PUBLIC_KEY_LENGTH + 1,
             Self::SECP256K1(_) => 65,
-            Self::FALCON512(_) => near_falcon512::falcon512_public_key_bytes() + 1,
+            Self::FALCON512(_) => near_falcon512::NEAR_FALCON512_PUBKEY_SIZE + 1,
         }
     }
 
@@ -289,7 +289,7 @@ impl PublicKey {
             }
             KeyType::SECP256K1 => PublicKey::SECP256K1(Secp256K1PublicKey([0u8; 64])),
             KeyType::FALCON512 => {
-                PublicKey::FALCON512(Falcon512PublicKey([0u8; near_falcon512::falcon512_public_key_bytes()]))
+                PublicKey::FALCON512(Falcon512PublicKey([0u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]))
             }
         }
     }
@@ -319,7 +319,7 @@ impl PublicKey {
 
     pub fn unwrap_as_falcon512(&self) -> &Falcon512PublicKey {
         match self {
-            PublicKey::FALCON512(key) => key,
+            Self::FALCON512(key) => key,
             _ => panic!(),
         }
     }
@@ -474,13 +474,13 @@ impl FromStr for PublicKey {
                 Ok(PublicKey::SECP256K1(Secp256K1PublicKey(array)))
             }
             KeyType::FALCON512 => {
-                let mut array = [0; near_falcon512::falcon512_public_key_bytes()];
+                let mut array = [0; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE];
                 let length = bs58::decode(key_data)
                     .into(&mut array)
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != near_falcon512::falcon512_public_key_bytes() {
+                if length != near_falcon512::NEAR_FALCON512_PUBKEY_SIZE {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: near_falcon512::falcon512_public_key_bytes(),
+                        expected_length: near_falcon512::NEAR_FALCON512_PUBKEY_SIZE,
                         received_length: length,
                     });
                 }
@@ -535,11 +535,11 @@ impl Eq for ED25519SecretKey {}
 
 //Falcon-512 secret key
 #[derive(Clone)]
-pub struct Falcon512SecretKey(pub [u8; near_falcon512::falcon512_secret_key_bytes()]);
+pub struct Falcon512SecretKey(pub [u8; near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE]);
 
 impl PartialEq for Falcon512SecretKey {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.0[..near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE] == other.0[..near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE]
     }
 }
 
@@ -548,7 +548,7 @@ impl std::fmt::Debug for Falcon512SecretKey {
         write!(
             f,
             "{}",
-            bs58::encode(&self.0[..].to_vec()).into_string()
+            bs58::encode(&self.0[..near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE].to_vec()).into_string()
         )
     }
 }
@@ -583,8 +583,7 @@ impl SecretKey {
             }
             KeyType::FALCON512 => {
                 let (_public_key, secret_key) = near_falcon512::falcon512_keypair();
-                let mut sk:[u8; near_falcon512::falcon512_secret_key_bytes()] = [0u8; near_falcon512::falcon512_secret_key_bytes()];
-                sk.copy_from_slice(secret_key.as_bytes());
+                let sk = <[u8; near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE]>::from(secret_key);
                 SecretKey::FALCON512(Falcon512SecretKey(sk))
             }
         }
@@ -610,9 +609,19 @@ impl SecretKey {
             }
 
             SecretKey::FALCON512(secret_key) => {
-                let secret_key = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).expect("Secret Key from bytes failed");
+                let secret_key = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).unwrap();
                 Signature::FALCON512(Falcon512Signature(near_falcon512::falcon512_detached_sign(data, &secret_key)))
             }
+        }
+    }
+
+    pub fn sign_with_seed(&self, data: &[u8], seed: &[u8]) -> Signature {
+        match &self {
+            SecretKey::FALCON512(secret_key) => {
+                let secret_key = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).unwrap();
+                Signature::FALCON512(Falcon512Signature(near_falcon512::falcon512_detached_sign_with_seed(data, &secret_key, seed)))
+            }
+            _ => panic!(),
         }
     }
 
@@ -631,10 +640,9 @@ impl SecretKey {
             SecretKey::FALCON512(secret_key) => {
                 let sk = near_falcon512::falcon512::SecretKey::from_bytes(&secret_key.0).expect("Secret Key from bytes failed");
                 let pk = near_falcon512::falcon512_public_key_from_secret_key(sk);
-                let mut pub_key = [0u8; near_falcon512::falcon512_public_key_bytes()];
-                pub_key.copy_from_slice(pk.as_bytes());
+                let public_key = <[u8; near_falcon512::NEAR_FALCON512_PUBKEY_SIZE]>::from(pk);
                 PublicKey::FALCON512(
-                    Falcon512PublicKey(pub_key)
+                    Falcon512PublicKey(public_key)
                 )
             }
         }
@@ -702,18 +710,18 @@ impl FromStr for SecretKey {
                 ))
             }
             KeyType::FALCON512 => {
-                const SIZE:usize = near_falcon512::falcon512_secret_key_bytes();
+                const SIZE:usize = near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE;
                 let mut array = [0; SIZE];
                 let length = bs58::decode(key_data)
                     .into(&mut array[..])
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != near_falcon512::falcon512_secret_key_bytes() {
+                if length != near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: near_falcon512::falcon512_secret_key_bytes(),
+                        expected_length: near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE,
                         received_length: length,
                     });
                 }
-                let sk:[u8; near_falcon512::falcon512_secret_key_bytes()] = array[..near_falcon512::falcon512_secret_key_bytes()].try_into().unwrap();
+                let sk:[u8; near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE] = array[..near_falcon512::NEAR_FALCON512_PRIVKEY_SIZE].try_into().unwrap();
                 Ok(Self::FALCON512(Falcon512SecretKey(sk)))
             }
         }
@@ -859,8 +867,8 @@ impl From<Secp256K1Signature> for [u8; 65] {
 #[derive(Clone)]
 pub struct Falcon512Signature(near_falcon512::falcon512::DetachedSignature);
 
-impl From<[u8; near_falcon512::falcon512_signature_bytes()]> for Falcon512Signature {
-    fn from(data: [u8; near_falcon512::falcon512_signature_bytes()]) -> Self {
+impl From<[u8; near_falcon512::NEAR_FALCON512_SIG_SIZE]> for Falcon512Signature {
+    fn from(data: [u8; near_falcon512::NEAR_FALCON512_SIG_SIZE]) -> Self {
         Falcon512Signature::try_from(&data[..]).unwrap()
     }
 }
@@ -869,9 +877,9 @@ impl TryFrom<&[u8]> for Falcon512Signature {
     type Error = crate::errors::ParseSignatureError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        if data.len() != near_falcon512::falcon512_signature_bytes() {
+        if data.len() != near_falcon512::NEAR_FALCON512_SIG_SIZE {
             return Err(Self::Error::InvalidLength {
-                expected_length: near_falcon512::falcon512_signature_bytes(),
+                expected_length: near_falcon512::NEAR_FALCON512_SIG_SIZE,
                 received_length: data.len(),
             });
         }
@@ -901,10 +909,9 @@ impl std::fmt::Debug for Falcon512Signature {
 
 impl Eq for Falcon512Signature {}
 
-impl From<Falcon512Signature> for [u8; near_falcon512::falcon512_signature_bytes()] {
-    fn from(sig: Falcon512Signature) -> [u8; near_falcon512::falcon512_signature_bytes()] {
-        let mut signature = [0u8; near_falcon512::falcon512_signature_bytes()];
-        signature.copy_from_slice(sig.0.as_bytes());
+impl From<Falcon512Signature> for [u8; near_falcon512::NEAR_FALCON512_SIG_SIZE] {
+    fn from(sig: Falcon512Signature) -> [u8; near_falcon512::NEAR_FALCON512_SIG_SIZE] {
+        let signature = <[u8; near_falcon512::NEAR_FALCON512_SIG_SIZE]>::from(sig.0);
         signature
     }
 }
@@ -1068,8 +1075,9 @@ impl BorshDeserialize for Signature {
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
             }
             KeyType::FALCON512 => {
-                let array: [u8; near_falcon512::falcon512_signature_bytes()] = BorshDeserialize::deserialize(buf)?;
-                Ok(Signature::FALCON512(Falcon512Signature(near_falcon512::falcon512::DetachedSignature::from_bytes(&array).expect("Falcon512 deserialize failed"))))
+                let array: [u8; near_falcon512::NEAR_FALCON512_SIG_SIZE] = BorshDeserialize::deserialize(buf)?;
+                Ok(Signature::FALCON512(
+                    Falcon512Signature(near_falcon512::falcon512::DetachedSignature::from_bytes(&array).expect("Falcon512 deserialize failed"))))
             }
         }
     }
@@ -1144,13 +1152,13 @@ impl FromStr for Signature {
                 Ok(Signature::SECP256K1(Secp256K1Signature(array)))
             }
             KeyType::FALCON512 => {
-                let mut array = [0; near_falcon512::falcon512_signature_bytes()];
+                let mut array = [0; near_falcon512::NEAR_FALCON512_SIG_SIZE];
                 let length = bs58::decode(sig_data)
                     .into(&mut array[..])
                     .map_err(|err| Self::Err::InvalidData { error_message: err.to_string() })?;
-                if length != near_falcon512::falcon512_signature_bytes() {
+                if length != near_falcon512::NEAR_FALCON512_SIG_SIZE {
                     return Err(Self::Err::InvalidLength {
-                        expected_length: near_falcon512::falcon512_signature_bytes(),
+                        expected_length: near_falcon512::NEAR_FALCON512_SIG_SIZE,
                         received_length: length,
                     });
                 }
@@ -1182,7 +1190,7 @@ mod tests {
 
     #[test]
     fn test_sign_verify() {
-        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1] {
+        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1, KeyType::FALCON512] {
             let secret_key = SecretKey::from_random(key_type);
             let public_key = secret_key.public_key();
             use sha2::Digest;
@@ -1190,16 +1198,6 @@ mod tests {
             let signature = secret_key.sign(&data);
             assert!(signature.verify(&data, &public_key));
         }
-    }
-
-    #[test]
-    fn test_sign_falcon() {
-        let key_type = KeyType::FALCON512;
-        let secret_key = SecretKey::from_random(key_type);
-        let public_key = secret_key.public_key();
-        let data = (b"Ceci est un test !!").to_vec();
-        let signature = secret_key.sign(&data);
-        assert!(signature.verify(&data, &public_key));
     }
 
     #[test]
@@ -1256,10 +1254,47 @@ mod tests {
     }
 
     #[test]
+    fn test_json_serialize_falcon512() {
+        use sha2::Digest;
+        let data = sha2::Sha256::digest(b"123").to_vec();
+
+        let sk = SecretKey::from_seed(KeyType::FALCON512, "test");
+        let pk = sk.public_key();
+        
+        let expected = "\"falcon512:333DY9RuD5iPWKpG62k19zitnG1q2QkvLmYCtj3QZiAQHNr8AStUaMfuykabGmiDE31UBsAtdQgkhKtb5GBAvjopfU6FbUf4iSeLffPfcFVBxNi5uJSmPCrLzjwSSfuDVkGtuuiXco6DsvjZW4PdgFz1NSY75iHERmg2e3FuB217maJcv6bipbZftV3MqAdi1gQhYy8nH2LPfXHakuiUYYuvZcLcyx6sthD7aoaECUvvzVsVUXxQLr6arEBRUedeR7284zm1WD9q3spnEXxrenbVbj4wuetyGYYT851zShpcyKFYz9omXfX7NJBW9jfRxjBrwtSTsSoZYRRf7ehrQhc8jSH1vVAX6hbfMjq34c5dfpceTfc19vgGwrJo4sHc49wsTvKcNcHS36qr3qgb8mKe1vbEUmuQzHV3bRgtAUqcSsXbgiZBkRupRLGLCVSHSGk2E6jU3MmCv2zpMMEt6GyheZdrp7fu4G9pXttg18xFT4ERuYK3VD4zw6dPXbzTfEHprGBu9u4ifUNF39FhJqHhTEYVAdeN2N9YH5cERcDUCvBYT7CcfKFHX69H5YpfxJk4qytrLaVwyoa9PW4PKBgdUhLAVGYttdeX9tQ5MxN5sgFAsyvxxJuF2Da12QXzQ6hEQXp3V2Q9ewdMbW6yvbkAwHhtTkNh52dTQUfr8xocT5qZEMSi63DoXwAd4HEUUwJ3PCpx8JEPKhvRMBj7Xd23duU9e33SuatURHdr7n7PCS2GPwLsDQwr3F1xCXricayJNcyXERiJtYTxZw4V8DHkHGyTXjmQeu8CFcqDFzjrgp4D2E8796ZDZQXyKMy2f3okWugsxPJHJ6UzjzPBUov7BPoAgJtp7zZBEvxvM5x2jaffaEeN6jqZ2eM8PzqsoaoCXnn6gtLTygzDjoUzDuftuXEMs8RFg2wb5J54WGZ2q3LWqUoeXa9d3NxBSt5RVaURge3k9g92cN8AwDZx5R3TPBDX1AuhDzoNphdA5qbWt7dM5MbeaUjaowydWz8Jt59EEcTcftwDycHLvHu8wMamqUtrKHkto8tG9VG6SkkdLkrPkvUmuK1qUR8Cz2Vh8X2Xjvkt17FuiNxuGdHEP4xnAzYybCakzxmWbgMhx9XVmSbCTcKEzvMtBrzwTWCT967YT19rskt7cbP8SKZPj7hm1HCYkUvmtSvgCxPDzRGPkYfH137sjZCfvwtJKMykucWuUvg7F\"";
+        assert_eq!(serde_json::to_string(&pk).unwrap(), expected);
+        assert_eq!(pk, serde_json::from_str(expected).unwrap());
+        let pk2: PublicKey = pk.to_string().parse().unwrap();
+        assert_eq!(pk, pk2);
+
+        let expected = "\"falcon512:2ppeKS3Ur3wkvPHB7VTCUTZdEPRBXw19auRgir3gtCkLDjSSxfZT3287La1p3CUDUSR7zJRiaP62S3aHX8RECGqPzHEz6q2pkEmwpmkgZ4QJWtV3eVKsrPGbZieTzBP4JvnbaLQY3fog16LpLkSN2BvbLssSaFmskriDp1v6GWnpCyEduKFSW4oscAohPUVNAhHkncppCWRwq372eydbapxk8Wpt1YeQJj4AB1UAZEgUEKvVZsGVeCYT4iCCd6B8SJJWS2PkL8LYjzf4YGVKbdJNYEj61tvu4Jiuf4E867VF5ZGccnDyJuPhk5Nps2RssJ5z62AvByYhg9BVGnGZvT8LT866kvsHFyezRJhDJoCYKXQaLoLgazvJsaCWNQKeA7wm3sosKYXzkH3HjWQ4wd3mb3SbELvTGLkKHADrP9Y1q11L6PZpbJWdu3pmfuzbqY61GFdojHLjCSiU8YKarPxWFLryFsEZ7RUCnNdK1vc5oJUhrAwg9ZSuhjYCWUAomjs9srXqJGjCbCzKhx4XCakcvxTEWUYYTmnTfhaCFtwwbtqHWZuvkhjpLPSQmaZYPWPQZjiW9oSXsPsckm679FryNwGeRUKaE8v3hWftsdaHhHxCLfmeHkmCuKHHg5Fc5jbCPKgHzsCihBHiCQsPAJwJ55PLetxLZtqGKYetioizeQ8VHNDQfZRuRcr7VrQeEYccQxGeQK57kbniRjdHscSLxjyj5bSumixpSvjUTRhibCm9SV7NH3cL9iCTmFMxZ8RFycKknfArzHFnXKjbdSYUopHyzRUrtNGgF1Xot8HoT5euegg8HULSmgWt1GZVvHWspRo4oMvdx6YhCwTLznDv8oZf3aAwrEyfdYUJPipXxNsuSwRhYsW3WBGXmXXxbqGMzeuq4hU66T3T9VnAziK6HdJvqdmsYojMJ7RXWX2ZBaz2GZdJmzV7yC8aSGaoJhgHGdZrDT66XoR9bdsKh9TaAFDTEeq9V3PYHk7ed3j8K7y1rCFgtgFNSvT6FdNf3BxJPHbUPWpJ3QHWQKTiPKFiBYCohAjYzPFGRR6Sz9mtnxH216oFDAVTQKsP9abYfniM5f9bvPiezS3vthfW8VNg6SGVkJE8kavxYnicJjtXAFi4uPAk1ygCrZXCNW83jB3kqyFqin1dAfyxnskXa8kfeiZAV7ZCLbNxGDqx5EWnE43EYHButMzgUJJTVBEp8jUZN84AVZbkmYsw6fDXLjf44xUH5TX8cLxo8seubQV8ZaUotFLV2HmkqD8TdALSiqcwMZPPZj6xzTx3WsrxWdryYJjCoBZV21mJMnSohHLA6Ji9yghYxYuTMFXs7g6VeGmXJiLSa1BBziKia721MLcuZLxMaJPrrFAAxTWtWj2nqFe41bwWzKjUNyPozC7J8giSj3UpRDWxSqnEZEQ8FFFURobEM9RXKP66U2RCvKnTSHsXPDLuVTzumVDEmLawku2Y9aoAwxa656ArHrtrmidDg9NjDDned1JjaZfgSB8Qxe1pEr8cmDhj3RbSkRhKLUXveqkexgyn7ozST9oT2MXRLwEnP1scQWZWWWj7rvxvNShTPggwQxRVXHkJTdP8eMNwBJB5B3mtovvLKUpjrvFtraP1eVuNxdNv3PtBADbBQdd8mi76uujoFKt5CCoX8V5of7i8JNQj3gS5aupyYLhgknraxRnyLtZDbadHux4aD8vBvwGYenz1s49nUTAX1vxL64bNpcGDUwPwT4mQT6\"";
+        assert_eq!(serde_json::to_string(&sk).unwrap(), expected);
+        assert_eq!(sk, serde_json::from_str(expected).unwrap());
+
+        let seed = "signature test";
+        let signature = sk.sign_with_seed(&data, seed.as_bytes());
+        let expected = "\"falcon512:2wG5V3PgZCWRt2mW3ATpsZ6Jz4aTn5ee1z5QSoNYaQhScJ88BYGikW5pi1Y7JD7G8qXL9KzuHB8fou7KDCR5QRDaUcEi2umMkjBXEdcG5GoxZL4wp99Bh9zi8Q38eU2jYNDG72zBEGKs5EV8pFmZdJBQQRTSTTRQzAbx4Rqho8vpoXL52ikPVGD3wuRxwKFw2AfWAXEdCeAo5hwwb7JGqMuMNKkmXrQgsbpHSqj8P9z2z8KdVTRPSBtjjTgxgpb4peyRXAEonaYPFLiL2X3BYhaLqgSA7kuTrje2h3dwMM2LTZEsz6UH4cVJkfP6ZX2fMkGYTMvohdjTubxFgdxQHHTRMGTmmBu7EngTvY1bytaEuLp817F6agfohCz5dRKqyzfQZ8a1XNcndLXtq6sg2Q8Pp3b5uWxoH8ViaPsoGYRDjMZyDqzcN2zPDSiPMYC1T7nV9ywMtcem9yai1uFdJunem1Ks8EEWNhjiqEDfTysjn9XdRKYWHqmgQHwyyLaqFb5STQBc6uU64rRm6A55RvxmuTXDFAQz58RRnkvqE1jF1Qtc5jN6maJAqr44izp17CAMabicuTFKzDBvZwqBzWpBEcRMSZZ947s7DRHe5wMMjkpn4bz7w14wCGpFVYw3T6fetaAzL9L2L4Dm1Fs6sPiTmWQTarZpV3FDC5VDmrMhqNGqfiRNnTYhPrsb12SRctoQULfBZcH5EEh6dkAfumZ4rgYwD7uKWVmAPBL2th7eYTx1oPmngVt1suKYdqJmzAHzqi4ds6Tp2suwRRueZXUNfhAbQhCSGKLq52dzgmFZytL6RBP7cx4kUrrrsXegfNBKxJ5zMBNWPnTb4ASoxjmBrMvvYKadLRWLxKFHVodJh8TNDpqQzmxgFKtt2aRXh4Bqexeqfihjqh\"";
+        assert_eq!(serde_json::to_string(&signature).unwrap(), expected);
+        assert_eq!(signature, serde_json::from_str(expected).unwrap());
+        let signature_str: String = signature.to_string();
+        let signature2: Signature = signature_str.parse().unwrap();
+        assert_eq!(signature, signature2);
+
+        let signature = sk.sign(&data);
+        let expected = "\"falcon512:2wG5V3PgZCWRt2mW3ATpsZ6Jz4aTn5ee1z5QSoNYaQhScJ88BYGikW5pi1Y7JD7G8qXL9KzuHB8fou7KDCR5QRDaUcEi2umMkjBXEdcG5GoxZL4wp99Bh9zi8Q38eU2jYNDG72zBEGKs5EV8pFmZdJBQQRTSTTRQzAbx4Rqho8vpoXL52ikPVGD3wuRxwKFw2AfWAXEdCeAo5hwwb7JGqMuMNKkmXrQgsbpHSqj8P9z2z8KdVTRPSBtjjTgxgpb4peyRXAEonaYPFLiL2X3BYhaLqgSA7kuTrje2h3dwMM2LTZEsz6UH4cVJkfP6ZX2fMkGYTMvohdjTubxFgdxQHHTRMGTmmBu7EngTvY1bytaEuLp817F6agfohCz5dRKqyzfQZ8a1XNcndLXtq6sg2Q8Pp3b5uWxoH8ViaPsoGYRDjMZyDqzcN2zPDSiPMYC1T7nV9ywMtcem9yai1uFdJunem1Ks8EEWNhjiqEDfTysjn9XdRKYWHqmgQHwyyLaqFb5STQBc6uU64rRm6A55RvxmuTXDFAQz58RRnkvqE1jF1Qtc5jN6maJAqr44izp17CAMabicuTFKzDBvZwqBzWpBEcRMSZZ947s7DRHe5wMMjkpn4bz7w14wCGpFVYw3T6fetaAzL9L2L4Dm1Fs6sPiTmWQTarZpV3FDC5VDmrMhqNGqfiRNnTYhPrsb12SRctoQULfBZcH5EEh6dkAfumZ4rgYwD7uKWVmAPBL2th7eYTx1oPmngVt1suKYdqJmzAHzqi4ds6Tp2suwRRueZXUNfhAbQhCSGKLq52dzgmFZytL6RBP7cx4kUrrrsXegfNBKxJ5zMBNWPnTb4ASoxjmBrMvvYKadLRWLxKFHVodJh8TNDpqQzmxgFKtt2aRXh4Bqexeqfihjqh\"";
+        assert_ne!(serde_json::to_string(&signature).unwrap(), expected);
+        assert_ne!(signature, serde_json::from_str(expected).unwrap());
+        let signature_str: String = signature.to_string();
+        let signature2: Signature = signature_str.parse().unwrap();
+        assert_eq!(signature, signature2);
+    }
+
+
+    #[test]
     fn test_borsh_serialization() {
         use sha2::Digest;
         let data = sha2::Sha256::digest(b"123").to_vec();
-        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1] {
+        for key_type in vec![KeyType::ED25519, KeyType::SECP256K1, KeyType::FALCON512] {
             let sk = SecretKey::from_seed(key_type, "test");
             let pk = sk.public_key();
             let bytes = pk.try_to_vec().unwrap();
